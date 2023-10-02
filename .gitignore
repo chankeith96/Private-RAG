@@ -1,0 +1,17 @@
+# Environment Variables
+.env
+
+# Ignore Data Folder
+data/*
+!data/.gitkeep
+
+# Ignore Models Folder
+models/*
+!models/.gitkeep
+
+# Ignore Temp Folder
+temp/*
+!temp/.gitkeep
+
+.DS_Store
+
