@@ -64,23 +64,37 @@ st.title("Document Q&A with RAG")
 with st.sidebar:
     st.title("Document Q&A with RAG")
     st.write("Made by Keith Chan")
-    st.markdown(
+    st.divider()
+
+    st.markdown("# About")
+    st.write(
+        """Document Q&A allows you to ask questions about your
+        documents and get accurate answers with instant citations.
+        This app is designed to implement Retrieval Augmented Generation using locally-hosted LLMs for complete data privacy and security.
+
+        """
+    )
+    st.warning(
         "This is a Proof of Concept system and may contain bugs or unfinished"
         " features."
     )
-    st.markdown("Source code can be found [here].")
-    with st.expander("What is this app about?"):
+    st.markdown(
+        "Source code can be found [here](https://github.com/chank20/RAG-Implementation)."
+    )
+    st.divider()
+
+    with st.expander("How to use"):
         st.markdown(
             """
-            This app is designed to implement Retrieval Augmented Generation using locall-run LLMs.\n
-            Instructions:
-                - User uploads PDF document (later versions will allow other file types)
-                - Provide queries to the document.
+                1. 📄 Upload a single PDF document (later versions will allow other file types and multiple documents)
+                2. 💬 Ask questions about your document
             """
         )
+    st.divider()
+
     placeholder = st.empty()
     with placeholder.container():
-        add_spacer(15)
+        add_spacer(1)
 
     # Display number of tokens used
     token_counter = st.empty()
