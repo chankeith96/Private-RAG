@@ -9,13 +9,12 @@ from langchain.callbacks import get_openai_callback
 from langchain.chains import RetrievalQA
 from langchain.chat_models import ChatOpenAI
 from langchain.document_loaders import PyPDFLoader
+from langchain.embeddings import LlamaCppEmbeddings
 from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.llms import CTransformers
+from langchain.llms import LlamaCpp
 from langchain.text_splitter import TokenTextSplitter
 from langchain.vectorstores import Chroma
-
-# from langchain.llms import LlamaCpp
-# from langchain.llms import CTransformers
-# from langchain.embeddings import LlamaCppEmbeddings
 
 
 # Initialize Session State Variables
@@ -46,15 +45,9 @@ if not load_dotenv(dotenv_path):
     exit(1)
 
 # OpenAI config
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-
-# Define the LLM
-# llm = ChatOpenAI(temperature=0,model_name="gpt-4")
-llm = ChatOpenAI(temperature=0, model_name="gpt-3.5-turbo")
-# llm = LlamaCpp(model_path="../models/llama-2-7b-chat.Q4_K_M.gguf", n_ctx=4048, temperature=0, max_tokens=0) #n_ctx is number of tokens used for context, and max_tokens is length of response #Source: https://swharden.com/blog/2023-07-29-ai-chat-locally-with-python/
-# config = {'max_new_tokens': 512, 'temperature': 0.01}
-# llm = CTransformers(model='../models/llama-2-7b-chat.ggmlv3.q8_0.bin',
-#                     model_type='llama', config=config)
+OPENAI_API_KEY = os.environ.get(
+    "OPENAI_API_KEY"
+)  # TODO: consider removing, currently not used
 
 # LAYOUT
 # st.set_page_config(page_title="DOCAI", page_icon="🤖", layout="wide", )
@@ -62,7 +55,7 @@ st.title("Document Q&A with RAG")
 
 # Sidebar Layout
 with st.sidebar:
-    st.title("Document Q&A with RAG")
+    st.title("🦙📄💬 Document Q&A with RAG")
     st.write("Made by Keith Chan")
     st.divider()
 
@@ -70,8 +63,8 @@ with st.sidebar:
     st.write(
         """Document Q&A allows you to ask questions about your
         documents and get accurate answers with instant citations.
-        This app is designed to implement Retrieval Augmented Generation using locally-hosted LLMs for complete data privacy and security.
-
+        This app is designed to implement Retrieval Augmented Generation
+        using locally-hosted LLMs for complete data privacy and security.
         """
     )
     st.warning(
@@ -119,6 +112,44 @@ def create_embeddings_and_vectorstore(file_path):
     return db
 
 
+# Define the LLM
+model_list = [
+    "GPT-3.5-turbo",
+    "GPT-4",
+    "Llama2-7B (4bit)",
+    "Llama2-7B (8bit)",
+    "Llama2-13B (5bit)",
+]
+selected_model = st.selectbox(
+    "Choose a model", options=model_list, key="selected_model"
+)
+if selected_model == "GPT-3.5-turbo":
+    llm = ChatOpenAI(temperature=0, model_name="gpt-3.5-turbo")
+elif selected_model == "GPT-4":
+    llm = ChatOpenAI(temperature=0, model_name="gpt-4")
+elif selected_model == "Llama2-7B (4bit)":
+    llm = LlamaCpp(
+        model_path="../models/llama-2-7b-chat.Q4_K_M.gguf",
+        n_ctx=4048,
+        temperature=0,
+        max_tokens=0,
+    )  # n_ctx is number of tokens used for context, and max_tokens is length of response #Source: https://swharden.com/blog/2023-07-29-ai-chat-locally-with-python/
+elif selected_model == "Llama2-7B (8bit)":
+    llm = CTransformers(
+        model="../models/llama-2-7b-chat.ggmlv3.q8_0.bin",
+        model_type="llama",
+        config={"max_new_tokens": 512, "temperature": 0.01},
+    )
+elif selected_model == "Llama2-13B (5bit)":
+    llm = LlamaCpp(
+        model_path="../models/llama-2-13b-chat.Q5_K_M.gguf",
+        verbose=False,
+        n_ctx=4048,
+        streaming=False,
+        temperature=0,
+    )
+st.divider()
+
 uploaded_file = st.file_uploader(
     "Upload a PDF File (No bigger than 200mb)",
     type="pdf",
@@ -161,7 +192,7 @@ if uploaded_file is not None and st.session_state.submitted:
             search_kwargs={"k": 2}
         ),  # search_type="mmr"),#search_kwargs={"k":3}),
         return_source_documents=True,
-        chain_type_kwargs={"prompt": prompt},
+        # chain_type_kwargs={"prompt": prompt},
     )
 
     st.success("chain created!")
