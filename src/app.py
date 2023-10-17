@@ -147,6 +147,7 @@ elif selected_model == "Llama2-13B (5bit)":
         n_ctx=4048,
         streaming=False,
         temperature=0,
+        n_gpu_layers=1,
     )
 st.divider()
 
@@ -182,7 +183,7 @@ if uploaded_file is not None and st.session_state.submitted:
     Question: {question}
     Answer:
     """
-
+    # NOTE: Llama2 requires a different prompt template with [INST] and <<SYS>> tags
     prompt = PromptTemplate.from_template(template)
 
     # Initialise RetrievalQA Chain
@@ -194,7 +195,7 @@ if uploaded_file is not None and st.session_state.submitted:
         return_source_documents=True,
         # chain_type_kwargs={"prompt": prompt},
     )
-
+    st.write(chain)
     st.success("chain created!")
 
 
