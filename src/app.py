@@ -184,6 +184,8 @@ if uploaded_file is not None and st.session_state.submitted:
     Answer:
     """
     # NOTE: Llama2 requires a different prompt template with [INST] and <<SYS>> tags
+    # Interestingly, I don't think RetrievalQA has a ConditionalPromptSelector to auto switch to llama prompt
+    # Code currently uses default question_answering prompt
     prompt = PromptTemplate.from_template(template)
 
     # Initialise RetrievalQA Chain
@@ -195,7 +197,6 @@ if uploaded_file is not None and st.session_state.submitted:
         return_source_documents=True,
         # chain_type_kwargs={"prompt": prompt},
     )
-    st.write(chain)
     st.success("chain created!")
 
 
