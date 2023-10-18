@@ -148,6 +148,8 @@ elif selected_model == "Llama2-13B (5bit)":
         n_ctx=4048,
         streaming=False,
         temperature=0,
+        n_gpu_layers=1,
+        n_batch=512,
     )
 st.divider()
 
