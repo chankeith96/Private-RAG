@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from langchain import PromptTemplate
 from langchain.callbacks import get_openai_callback
 from langchain.chains import RetrievalQA
+from langchain.chains.prompt_selector import ConditionalPromptSelector
 from langchain.chat_models import ChatOpenAI
 from langchain.document_loaders import PyPDFLoader
 from langchain.embeddings import LlamaCppEmbeddings
@@ -15,7 +16,6 @@ from langchain.llms import CTransformers
 from langchain.llms import LlamaCpp
 from langchain.text_splitter import TokenTextSplitter
 from langchain.vectorstores import Chroma
-
 
 # Initialize Session State Variables
 if "submitted" not in st.session_state:
@@ -130,6 +130,7 @@ elif selected_model == "GPT-4":
 elif selected_model == "Llama2-7B (4bit)":
     llm = LlamaCpp(
         model_path="../models/llama-2-7b-chat.Q4_K_M.gguf",
+        verbose=False,
         n_ctx=4048,
         temperature=0,
         max_tokens=0,
@@ -147,7 +148,6 @@ elif selected_model == "Llama2-13B (5bit)":
         n_ctx=4048,
         streaming=False,
         temperature=0,
-        n_gpu_layers=1,
     )
 st.divider()
 
@@ -176,17 +176,42 @@ if uploaded_file is not None and st.session_state.submitted:
     db = create_embeddings_and_vectorstore(save_path)
 
     # Create Prompt
-    template = """Use the following pieces of context to answer the question at the end.
-    If you don't know the answer, just say that you don't know. Don't try to make up an answer.
+    # template = """Use the following pieces of context to answer the question at the end.
+    # If you don't know the answer, just say that you don't know. Don't try to make up an answer.
+    # {context}
+
+    # Question: {question}
+    # Answer:
+    # """
+
+    default_rag_template = """Use the following pieces of context to answer the question at the end. If you don't know the answer, just say that you don't know, don't try to make up an answer.
+
     {context}
 
     Question: {question}
-    Answer:
+    Helpful Answer:
+    """
+
+    llama_rag_template = """[INST]<<SYS>> Use the following pieces of context to answer the question at the end. If you don't know the answer, just say that you don't know, don't try to make up an answer.<</SYS>>
+    Question: {question}
+    Context: {context}
+    Answer: [/INST]
     """
     # NOTE: Llama2 requires a different prompt template with [INST] and <<SYS>> tags
     # Interestingly, I don't think RetrievalQA has a ConditionalPromptSelector to auto switch to llama prompt
-    # Code currently uses default question_answering prompt
-    prompt = PromptTemplate.from_template(template)
+    # Code currently uses default question_answering prompt (https://github.com/langchain-ai/langchain/blob/master/libs/langchain/langchain/chains/retrieval_qa/prompt.py)
+    default_rag_prompt = PromptTemplate.from_template(default_rag_template)
+    llama_rag_prompt = PromptTemplate.from_template(llama_rag_template)
+
+    rag_prompt_selector = ConditionalPromptSelector(
+        default_prompt=default_rag_prompt,
+        conditionals=[
+            (lambda llm: isinstance(llm, LlamaCpp), llama_rag_prompt)
+        ],
+    )
+
+    prompt = rag_prompt_selector.get_prompt(llm)
+    st.write(prompt.template)
 
     # Initialise RetrievalQA Chain
     chain = RetrievalQA.from_chain_type(
@@ -195,7 +220,7 @@ if uploaded_file is not None and st.session_state.submitted:
             search_kwargs={"k": 2}
         ),  # search_type="mmr"),#search_kwargs={"k":3}),
         return_source_documents=True,
-        # chain_type_kwargs={"prompt": prompt},
+        chain_type_kwargs={"prompt": rag_prompt_selector.get_prompt(llm)},
     )
     st.success("chain created!")
 
