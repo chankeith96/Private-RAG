@@ -105,7 +105,14 @@ def create_embeddings_and_vectorstore(file_path):
     text_splitter = TokenTextSplitter(chunk_size=100, chunk_overlap=0)
     texts = text_splitter.split_documents(pages)
 
-    embeddings = OpenAIEmbeddings()
+    # embeddings = OpenAIEmbeddings()
+    embeddings = LlamaCppEmbeddings(
+        model_path="../models/llama-2-7b-chat.Q4_K_M.gguf",
+        n_gpu_layers=1,
+        n_batch=512,
+        n_ctx=2000,
+    )
+    # embeddings = LlamaCppEmbeddings(model_path="../models/llama-2-13b-chat.Q5_K_M.gguf", n_gpu_layers=1, n_batch=512, n_ctx=2000)
 
     # Vector Store
     db = Chroma.from_documents(documents=texts, embedding=embeddings)
@@ -147,7 +154,7 @@ elif selected_model == "Llama2-13B (5bit)":
         verbose=False,
         n_ctx=4048,
         streaming=False,
-        temperature=0,
+        temperature=0.3,
         n_gpu_layers=1,
         n_batch=512,
     )
@@ -175,8 +182,11 @@ if uploaded_file is not None and st.session_state.submitted:
     if save_path.exists():
         st.success(f"File {filename} is successfully saved!")
 
+    time_start = time.time()
     db = create_embeddings_and_vectorstore(save_path)
+    time_elapsed = time.time() - time_start
 
+    st.write(f"Embedding time: {time_elapsed:.2f} sec")
     # Create Prompt
     # template = """Use the following pieces of context to answer the question at the end.
     # If you don't know the answer, just say that you don't know. Don't try to make up an answer.
