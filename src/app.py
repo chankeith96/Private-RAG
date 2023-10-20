@@ -10,10 +10,12 @@ from langchain.chains import RetrievalQA
 from langchain.chains.prompt_selector import ConditionalPromptSelector
 from langchain.chat_models import ChatOpenAI
 from langchain.document_loaders import PyPDFLoader
+from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.embeddings import LlamaCppEmbeddings
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.llms import CTransformers
 from langchain.llms import LlamaCpp
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.text_splitter import TokenTextSplitter
 from langchain.vectorstores import Chroma
 
@@ -102,17 +104,27 @@ def create_embeddings_and_vectorstore(file_path):
     pages = loader.load()
 
     # Chunk and Embeddings
-    text_splitter = TokenTextSplitter(chunk_size=100, chunk_overlap=0)
+    # text_splitter = TokenTextSplitter(chunk_size=100, chunk_overlap=0)
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=600,
+        chunk_overlap=300,
+        separators=["\n\n", "\n", " ", ""],  # adjust these as necessary
+    )
     texts = text_splitter.split_documents(pages)
 
     # embeddings = OpenAIEmbeddings()
-    embeddings = LlamaCppEmbeddings(
-        model_path="../models/llama-2-7b-chat.Q4_K_M.gguf",
-        n_gpu_layers=1,
-        n_batch=512,
-        n_ctx=2000,
-    )
+    # embeddings = LlamaCppEmbeddings(
+    #     model_path="../models/llama-2-7b-chat.Q4_K_M.gguf",
+    #     n_gpu_layers=1,
+    #     n_batch=512,
+    #     n_ctx=2000,
+    # )
     # embeddings = LlamaCppEmbeddings(model_path="../models/llama-2-13b-chat.Q5_K_M.gguf", n_gpu_layers=1, n_batch=512, n_ctx=2000)
+    model_name = "sentence-transformers/all-mpnet-base-v2"
+    # model_kwargs = {"device": "cuda"}
+    embeddings = HuggingFaceEmbeddings(
+        model_name=model_name
+    )  # , model_kwargs=model_kwargs)
 
     # Vector Store
     db = Chroma.from_documents(documents=texts, embedding=embeddings)
