@@ -11,6 +11,7 @@ from langchain.chains.prompt_selector import ConditionalPromptSelector
 from langchain.chat_models import ChatOpenAI
 from langchain.document_loaders import PyPDFLoader
 from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.embeddings import HuggingFaceInstructEmbeddings
 from langchain.embeddings import LlamaCppEmbeddings
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.llms import CTransformers
@@ -105,6 +106,7 @@ def create_embeddings_and_vectorstore(file_path):
 
     # Chunk and Embeddings
     # text_splitter = TokenTextSplitter(chunk_size=100, chunk_overlap=0)
+
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=600,
         chunk_overlap=300,
@@ -113,18 +115,32 @@ def create_embeddings_and_vectorstore(file_path):
     texts = text_splitter.split_documents(pages)
 
     # embeddings = OpenAIEmbeddings()
+
     # embeddings = LlamaCppEmbeddings(
     #     model_path="../models/llama-2-7b-chat.Q4_K_M.gguf",
     #     n_gpu_layers=1,
     #     n_batch=512,
     #     n_ctx=2000,
     # )
+
     # embeddings = LlamaCppEmbeddings(model_path="../models/llama-2-13b-chat.Q5_K_M.gguf", n_gpu_layers=1, n_batch=512, n_ctx=2000)
-    model_name = "sentence-transformers/all-mpnet-base-v2"
-    # model_kwargs = {"device": "cuda"}
-    embeddings = HuggingFaceEmbeddings(
-        model_name=model_name
-    )  # , model_kwargs=model_kwargs)
+
+    # model_name = "sentence-transformers/all-mpnet-base-v2"
+    # embeddings = HuggingFaceEmbeddings(
+    #     model_name=model_name
+    # )  # , model_kwargs={"device": "cuda"})
+
+    # emb_model = "sentence-transformers/all-MiniLM-L6-v2"
+    # embeddings = HuggingFaceEmbeddings(
+    #     model_name=emb_model,
+    #     # cache_folder=os.getenv('SENTENCE_TRANSFORMERS_HOME') # TODO Look into cache_folder param
+    # )
+
+    emb_model = "hkunlp/instructor-large"
+    embeddings = HuggingFaceInstructEmbeddings(
+        model_name=emb_model,
+        # cache_folder=os.getenv('SENTENCE_TRANSFORMERS_HOME') # TODO Look into cache_folder param
+    )
 
     # Vector Store
     db = Chroma.from_documents(documents=texts, embedding=embeddings)
