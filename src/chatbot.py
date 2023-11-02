@@ -84,7 +84,7 @@ elif selected_model == "Llama2-7B (4bit)":
     llm = LlamaCpp(
         model_path="../models/llama-2-7b-chat.Q4_K_M.gguf",
         n_ctx=4048,
-        temperature=0,
+        temperature=0.8,
         max_tokens=0,
     )  # n_ctx is number of tokens used for context, and max_tokens is length of response #Source: https://swharden.com/blog/2023-07-29-ai-chat-locally-with-python/
 elif selected_model == "Llama2-7B (8bit)":
@@ -99,8 +99,9 @@ elif selected_model == "Llama2-13B (5bit)":
         verbose=False,
         n_ctx=4048,
         streaming=False,
-        temperature=0,
+        temperature=0.8,
         n_gpu_layers=1,
+        n_batch=512,
     )
 st.divider()
 
