@@ -112,6 +112,7 @@ def create_embeddings_and_vectorstore(file_path):
         chunk_overlap=300,
         separators=["\n\n", "\n", " ", ""],  # adjust these as necessary
     )
+
     texts = text_splitter.split_documents(pages)
 
     # embeddings = OpenAIEmbeddings()
@@ -182,7 +183,7 @@ elif selected_model == "Llama2-13B (5bit)":
         verbose=False,
         n_ctx=4048,
         streaming=False,
-        temperature=0.3,
+        temperature=0.1,
         n_gpu_layers=1,
         n_batch=512,
     )
@@ -250,8 +251,9 @@ if uploaded_file is not None and st.session_state.submitted:
         ],
     )
 
-    prompt = rag_prompt_selector.get_prompt(llm)
-    st.write(prompt.template)
+    # TODO: Can be removed. Only used to debug prompt selection
+    system_prompt = rag_prompt_selector.get_prompt(llm)
+    st.write(system_prompt.template)
 
     # Initialise RetrievalQA Chain
     chain = RetrievalQA.from_chain_type(
