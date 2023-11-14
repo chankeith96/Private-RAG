@@ -2,6 +2,7 @@ import os
 import time
 from pathlib import Path
 
+import pandas as pd
 import yaml
 from dotenv import load_dotenv
 from langchain.callbacks import get_openai_callback
@@ -19,6 +20,13 @@ from langchain.prompts import PromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.text_splitter import TokenTextSplitter
 from langchain.vectorstores import Chroma
+from ragas import evaluate
+from ragas.langchain.evalchain import RagasEvaluatorChain
+from ragas.metrics import answer_relevancy
+from ragas.metrics import context_precision
+from ragas.metrics import context_recall
+from ragas.metrics import faithfulness
+
 
 # Load configuration file
 with open("../conf/config.yaml", "r") as file:
@@ -167,16 +175,85 @@ chain = RetrievalQA.from_chain_type(
     chain_type_kwargs={"prompt": rag_prompt_selector.get_prompt(llm)},
 )
 
-prompt = "tell me a joke"
-time_start = time.time()
-response = chain({"query": prompt})
-# response = chain(prompt)
-time_elapsed = time.time() - time_start
-print(response["result"])
-print(f"Response time: {time_elapsed:.2f} sec")
+# prompt = "tell me a joke"
+# time_start = time.time()
+# response = chain({"query": prompt})
+# time_elapsed = time.time() - time_start
+# print(response["result"])
+# print(f"Response time: {time_elapsed:.2f} sec")
 
-for i, source_doc in enumerate(response["source_documents"]):
-    print(f"### Source Document {i+1}")
-    print(source_doc.page_content)
-    print(f'Page {source_doc.metadata["page"]}')
-    print(f'Source file: {source_doc.metadata["source"]}')
+# for i, source_doc in enumerate(response["source_documents"]):
+#     print(f"### Source Document {i+1}")
+#     print(source_doc.page_content)
+#     print(f'Page {source_doc.metadata["page"]}')
+#     print(f'Source file: {source_doc.metadata["source"]}')
+
+##############################################
+# Evaluation
+
+# Configure evaluation LLMs
+# Ragas uses gpt3.5 by default - it's possible to change LLM for metrics
+faithfulness.llm.langchain_llm = ChatOpenAI(
+    model="gpt-3.5-turbo", request_timeout=120
+)
+context_precision.llm.langchain_llm = ChatOpenAI(
+    model="gpt-3.5-turbo", request_timeout=120
+)
+# answer_relevancy.llm.langchain_llm = ChatOpenAI(model="gpt-3.5-turbo", request_timeout=120)
+context_recall.llm.langchain_llm = ChatOpenAI(
+    model="gpt-3.5-turbo", request_timeout=120
+)
+
+# Import Evaluation dataset
+df = pd.read_csv("../data/batman_eval_simple.csv")
+df = df.head(2)
+eval_questions = df["question"].values.tolist()
+eval_answers = df["answer"].values.tolist()
+# Create examples using question-answer pairs
+examples = [
+    {"query": q, "ground_truths": [eval_answers[i]]}
+    for i, q in enumerate(eval_questions)
+]
+
+# create evaluation chains
+faithfulness_chain = RagasEvaluatorChain(metric=faithfulness)
+# answer_relevancy_chain = RagasEvaluatorChain(metric=answer_relevancy)
+context_precision_chain = RagasEvaluatorChain(metric=context_precision)
+context_recall_chain = RagasEvaluatorChain(metric=context_recall)
+
+# Generate predictions
+predictions = chain.batch(examples)
+# predictions
+
+faithfulness_scores = faithfulness_chain.evaluate(examples, predictions)
+print(faithfulness_scores)
+# answer_relevancy_scores = answer_relevancy_chain.evaluate(examples, predictions)
+# print(answer_relevancy_scores)
+context_precision_scores = context_precision_chain.evaluate(
+    examples, predictions
+)
+print(context_precision_scores)
+context_recall_scores = context_recall_chain.evaluate(examples, predictions)
+print(context_recall_scores)
+for i, score in enumerate(faithfulness_scores):
+    predictions[i].update(score)
+# for i, score in enumerate(answer_relevancy_scores):
+#     predictions[i].update(score)
+for i, score in enumerate(context_precision_scores):
+    predictions[i].update(score)
+for i, score in enumerate(context_recall_scores):
+    predictions[i].update(score)
+
+df_scores = pd.DataFrame(predictions)
+df_scores
+
+# # Display average scores
+mean_faithfulness = df_scores["faithfulness_score"].mean()
+# mean_answer_relevancy = df_scores['answer_relevancy_score'].mean()
+mean_context_precision = df_scores["context_precision_score"].mean()
+mean_context_recall = df_scores["context_recall_score"].mean()
+
+print(f"mean_faithfulness: {mean_faithfulness}")
+# print(f"mean_answer_relevancy: {mean_answer_relevancy}")
+print(f"mean_context_precision: {mean_context_precision}")
+print(f"mean_context_recall: {mean_context_recall}")
