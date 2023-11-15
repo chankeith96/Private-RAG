@@ -1,10 +1,9 @@
-import os
 import time
 from pathlib import Path
 
-import mlflow
+import mlflow_functions
 import pandas as pd
-import yaml
+import util
 from dotenv import load_dotenv
 from langchain.callbacks import get_openai_callback
 from langchain.chains import RetrievalQA
@@ -21,7 +20,6 @@ from langchain.prompts import PromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.text_splitter import TokenTextSplitter
 from langchain.vectorstores import Chroma
-from mlflow import MlflowClient
 from ragas import evaluate
 from ragas.langchain.evalchain import RagasEvaluatorChain
 from ragas.metrics import answer_relevancy
@@ -30,10 +28,7 @@ from ragas.metrics import context_recall
 from ragas.metrics import faithfulness
 
 # Load configuration file
-with open("../conf/config.yaml", "r") as file:
-    config = yaml.safe_load(file)
-print(config)
-
+config = util.get_config()
 
 # Load environment variables (including OpenAI API Key)
 dotenv_path = Path("../.env")
@@ -44,33 +39,9 @@ if not load_dotenv(dotenv_path):
     )
     exit(1)
 
-# Configure MLflow Tracking Client
-client = MlflowClient(tracking_uri="http://127.0.0.1:5000")
-
-# Create a new MLflow experiment
-experiment_description = (
-    "This is the Local RAG project for Oral Care's Innovisor platform. "
-    "This experiment contains RAG architectures different components and parameters."
-)
-experiment_tags = {
-    "project_name": "Local RAG",
-    "mlflow.note.content": experiment_description,
-}
-# TODO Check if experiment name already exists
-# experiment = client.create_experiment(name="RAG_Experiments", tags=experiment_tags)
-
-# Use the fluent API to set the tracking uri and the active experiment
-mlflow.set_tracking_uri("http://127.0.0.1:5000")
-
-# Sets the current active experiment to the "Apple_Models" experiment and returns the Experiment metadata
-my_experiment = mlflow.set_experiment("RAG_Experiments")
-
-# Define a run name for this iteration of training.
-# If this is not set, a unique name will be auto-generated for your run.
-run_name = "first_test"
-
-# Define an artifact path that the model will be saved to.
-artifact_path = "rf_apples"
+# Set up MLflow client and experiment
+client = mlflow_functions.configure_client()
+mlflow_functions.create_experiment(client)
 
 
 def create_embeddings_and_vectorstore(file_path):
@@ -302,13 +273,5 @@ metrics = {
     "evaluation_time": evaluation_time,
 }
 
-# Initiate the MLflow run context
-with mlflow.start_run(run_name=run_name) as run:
-    # Log the parameters used for the model fit
-    mlflow.log_params(params)
-
-    # Log the error metrics that were calculated during validation
-    mlflow.log_metrics(metrics)
-
-    mlflow.log_artifact("../data/evaluation_results.csv")
-    mlflow.log_artifact("../conf/config.yaml")
+# log params and metrics with MLflow
+mlflow_functions.log(params, metrics)
