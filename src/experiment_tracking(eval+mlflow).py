@@ -2,6 +2,7 @@ import os
 import time
 from pathlib import Path
 
+import mlflow
 import pandas as pd
 import yaml
 from dotenv import load_dotenv
@@ -20,13 +21,13 @@ from langchain.prompts import PromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.text_splitter import TokenTextSplitter
 from langchain.vectorstores import Chroma
+from mlflow import MlflowClient
 from ragas import evaluate
 from ragas.langchain.evalchain import RagasEvaluatorChain
 from ragas.metrics import answer_relevancy
 from ragas.metrics import context_precision
 from ragas.metrics import context_recall
 from ragas.metrics import faithfulness
-
 
 # Load configuration file
 with open("../conf/config.yaml", "r") as file:
@@ -42,6 +43,34 @@ if not load_dotenv(dotenv_path):
         " and is readable."
     )
     exit(1)
+
+# Configure MLflow Tracking Client
+client = MlflowClient(tracking_uri="http://127.0.0.1:5000")
+
+# Create a new MLflow experiment
+experiment_description = (
+    "This is the Local RAG project for Oral Care's Innovisor platform. "
+    "This experiment contains RAG architectures different components and parameters."
+)
+experiment_tags = {
+    "project_name": "Local RAG",
+    "mlflow.note.content": experiment_description,
+}
+# TODO Check if experiment name already exists
+# experiment = client.create_experiment(name="RAG_Experiments", tags=experiment_tags)
+
+# Use the fluent API to set the tracking uri and the active experiment
+mlflow.set_tracking_uri("http://127.0.0.1:5000")
+
+# Sets the current active experiment to the "Apple_Models" experiment and returns the Experiment metadata
+my_experiment = mlflow.set_experiment("RAG_Experiments")
+
+# Define a run name for this iteration of training.
+# If this is not set, a unique name will be auto-generated for your run.
+run_name = "first_test"
+
+# Define an artifact path that the model will be saved to.
+artifact_path = "rf_apples"
 
 
 def create_embeddings_and_vectorstore(file_path):
@@ -132,11 +161,11 @@ elif selected_model == "Llama2-13B (5bit)":
 else:
     print("Unavailable summarization llm. Please check config yaml")
 
-time_start = time.time()
+embedding_time_start = time.time()
 db = create_embeddings_and_vectorstore(config["Input document"])
-time_elapsed = time.time() - time_start
+embedding_time = time.time() - embedding_time_start
 
-print(f"Embedding time: {time_elapsed:.2f} sec")
+print(f"Embedding time: {embedding_time:.2f} sec")
 
 
 default_rag_template = """Use the following pieces of context to answer the question at the end. If you don't know the answer, just say that you don't know, don't try to make up an answer.
@@ -175,18 +204,6 @@ chain = RetrievalQA.from_chain_type(
     chain_type_kwargs={"prompt": rag_prompt_selector.get_prompt(llm)},
 )
 
-# prompt = "tell me a joke"
-# time_start = time.time()
-# response = chain({"query": prompt})
-# time_elapsed = time.time() - time_start
-# print(response["result"])
-# print(f"Response time: {time_elapsed:.2f} sec")
-
-# for i, source_doc in enumerate(response["source_documents"]):
-#     print(f"### Source Document {i+1}")
-#     print(source_doc.page_content)
-#     print(f'Page {source_doc.metadata["page"]}')
-#     print(f'Source file: {source_doc.metadata["source"]}')
 
 ##############################################
 # Evaluation
@@ -205,7 +222,7 @@ context_recall.llm.langchain_llm = ChatOpenAI(
 )
 
 # Import Evaluation dataset
-df = pd.read_csv("../data/batman_eval_simple.csv")
+df = pd.read_csv(config["Evaluation questions"])
 df = df.head(2)
 eval_questions = df["question"].values.tolist()
 eval_answers = df["answer"].values.tolist()
@@ -222,9 +239,14 @@ context_precision_chain = RagasEvaluatorChain(metric=context_precision)
 context_recall_chain = RagasEvaluatorChain(metric=context_recall)
 
 # Generate predictions
+prediction_time_start = time.time()
+print("got here")
 predictions = chain.batch(examples)
-# predictions
+print("got here")
+prediction_time = time.time() - prediction_time_start
+print(f"Prediction time: {prediction_time:.2f} sec")
 
+evaluation_time_start = time.time()
 faithfulness_scores = faithfulness_chain.evaluate(examples, predictions)
 print(faithfulness_scores)
 # answer_relevancy_scores = answer_relevancy_chain.evaluate(examples, predictions)
@@ -235,6 +257,7 @@ context_precision_scores = context_precision_chain.evaluate(
 print(context_precision_scores)
 context_recall_scores = context_recall_chain.evaluate(examples, predictions)
 print(context_recall_scores)
+
 for i, score in enumerate(faithfulness_scores):
     predictions[i].update(score)
 # for i, score in enumerate(answer_relevancy_scores):
@@ -245,7 +268,9 @@ for i, score in enumerate(context_recall_scores):
     predictions[i].update(score)
 
 df_scores = pd.DataFrame(predictions)
-df_scores
+df_scores.to_csv("../data/evaluation_results.csv")
+evaluation_time = time.time() - evaluation_time_start
+print(f"evaluation_time: {evaluation_time:.2f} sec")
 
 # # Display average scores
 mean_faithfulness = df_scores["faithfulness_score"].mean()
@@ -257,3 +282,33 @@ print(f"mean_faithfulness: {mean_faithfulness}")
 # print(f"mean_answer_relevancy: {mean_answer_relevancy}")
 print(f"mean_context_precision: {mean_context_precision}")
 print(f"mean_context_recall: {mean_context_recall}")
+
+
+# Experiment tracking: Log run
+params = {
+    "Input document": config["Input document"],
+    "Evaluation questions": config["Evaluation questions"],
+    "summarization_llm": config["llm"],
+    "embedding_llm": config["embedding_llm"],
+}
+
+metrics = {
+    "mean_faithfulness": mean_faithfulness,
+    "mean_context_precision": mean_context_precision,
+    #    "mean_answer_relevancy": mean_answer_relevancy,
+    "mean_context_recall": mean_context_recall,
+    "embedding_time": embedding_time,
+    "prediction_time": prediction_time,
+    "evaluation_time": evaluation_time,
+}
+
+# Initiate the MLflow run context
+with mlflow.start_run(run_name=run_name) as run:
+    # Log the parameters used for the model fit
+    mlflow.log_params(params)
+
+    # Log the error metrics that were calculated during validation
+    mlflow.log_metrics(metrics)
+
+    mlflow.log_artifact("../data/evaluation_results.csv")
+    mlflow.log_artifact("../conf/config.yaml")
